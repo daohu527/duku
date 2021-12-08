@@ -18,13 +18,13 @@
 from base.point3d import Point3d
 
 class PointManager:
-  def __init__(self):
+  def __init__(self, points):
     self._kdtree = None
 
   def getFront(self, point):
     pass
 
-  def getBehind(self, point):
+  def getBack(self, point):
     pass
 
   def getLeft(self, point):
