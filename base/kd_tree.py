@@ -19,6 +19,9 @@ from typing import List
 from operator import itemgetter
 
 
+MAX_INT = 2**31 - 1
+
+
 def get_k_median(arr, axis):
   arr.sort(key=itemgetter(axis))
   return len(arr) // 2
@@ -38,45 +41,102 @@ class Node:
     self.left = None
     self.right = None
 
+# Return the nearest node, if there are multiple, only return the first node.
 def _query_nearest(point, node, nearest, distance):
-  if node is None:
-    return
-
-  if node.left is None and node.right is None:
-    t_distance = euclidean_distance(node.element, point)
-    if t_distance < distance[0]:
-      distance[0] = t_distance
-      nearest[0] = node.element
+  if not node:
     return
 
   if point[node.axis] <= node.value:
-    if point[node.axis] - distance[0] <= node.value:
-      _query_nearest(point, node.left, nearest, distance)
+    _query_nearest(point, node.left, nearest, distance)
+  else:
+    _query_nearest(point, node.right, nearest, distance)
+
+  if point[node.axis] <= node.value:
     if point[node.axis] + distance[0] > node.value:
+      # check parent node
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance < distance[0]:
+        distance[0] = t_distance
+        nearest[0] = node.element
+
       _query_nearest(point, node.right, nearest, distance)
   else:
-    if point[node.axis] + distance[0] > node.value:
-      _query_nearest(point, node.right, nearest, distance)
-    if point[node.axis] - distance[0] <= node.value:
+    if point[node.axis] - distance[0] < node.value:
+      # check parent node
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance < distance[0]:
+        distance[0] = t_distance
+        nearest[0] = node.element
+
       _query_nearest(point, node.left, nearest, distance)
+
+def insert(nn, ele) -> None:
+  nn.append(ele)
+  nn.sort(key=itemgetter(1))
+  del nn[-1]
+
+def _query_knn(point, node, nn):
+  if not node:
+    return
+
+  if point[node.axis] <= node.value:
+    _query_knn(point, node.left, nn)
+  else:
+    _query_knn(point, node.right, nn)
+
+  if point[node.axis] <= node.value:
+    if point[node.axis] + nn[-1][1] > node.value:
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance < nn[-1][1]:
+        insert(nn, (node.element, t_distance))
+      _query_knn(point, node.right, nn)
+  else:
+    if point[node.axis] - nn[-1][1] < node.value:
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance < nn[-1][1]:
+        insert(nn, (node.element, t_distance))
+      _query_knn(point, node.left, nn)
+
+def _query_radius(point, node, plist, radius):
+  if not node:
+    return
+
+  if point[node.axis] <= node.value:
+    _query_radius(point, node.left, plist, radius)
+  else:
+    _query_radius(point, node.right, plist, radius)
+
+  if point[node.axis] <= node.value:
+    if point[node.axis] + radius >= node.value:
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance <= radius:
+        plist.append(node.element)
+      _query_radius(point, node.right, plist, radius)
+  else:
+    if point[node.axis] - radius <= node.value:
+      t_distance = euclidean_distance(node.element, point)
+      if t_distance <= radius:
+        plist.append(node.element)
+      _query_radius(point, node.left, plist, radius)
+
 
 class KdTree:
   def __init__(self, points = None) -> None:
     if points:
       assert len(points[0]) != 0, "Element is empty!"
       self._k = len(points[0])
-      self._root = self.construct(points, 0)
+      self._root = self._construct(points, 0)
     else:
       self._root = None
 
-  def construct(self, points, depth) -> Node:
+  def _construct(self, points, depth) -> Node:
     if not points:
         return None
     axis = depth % self._k
     median = get_k_median(points, axis)
     node = Node(points[median], axis)
-    node.left = self.construct(points[:median], depth + 1)
-    node.right = self.construct(points[median+1:], depth + 1)
+    node.left = self._construct(points[:median], depth + 1)
+    node.right = self._construct(points[median+1:], depth + 1)
     return node
 
   def add(self, point) -> bool:
@@ -87,22 +147,27 @@ class KdTree:
     assert self._root, "KdTree is empty!"
     pass
 
-  def query(self, n) -> List[Node]:
+  def query_knn(self, point, k) -> List[tuple]:
     assert self._root, "KdTree is empty!"
-    pass
 
-  def query_nearest(self, point) -> Node:
+    nn = [(None, MAX_INT)] * k
+    _query_knn(point, self._root, nn)
+    return [n[0] for n in nn]
+
+  def query_nearest(self, point) -> tuple:
     assert self._root, "KdTree is empty!"
 
     # Need to pass by ref, so we pass a list
     nearest = [None]
-    distance = [2**31 - 1] # init max value
+    distance = [MAX_INT] # init max value
     _query_nearest(point, self._root, nearest, distance)
     return nearest[0], distance[0]
 
-  def query_radius(self, radius) -> List[Node]:
+  def query_radius(self, point, radius) -> List[tuple]:
     assert self._root, "KdTree is empty!"
-    pass
+    plist = []
+    _query_radius(point, self._root, plist, radius)
+    return plist
 
   def display(self) -> None:
     assert self._root, "KdTree is empty!"
@@ -125,6 +190,14 @@ if __name__ == '__main__':
 
   print(euclidean_distance((1,2),(3,4)))
 
-  nearest, distance = tree.query_nearest((1,2))
-  print(nearest)
-  print(distance)
+  nearest, distance = tree.query_nearest((7,6))
+  print(nearest, distance)
+
+  knn = tree.query_knn((7,6), 2)
+  print(knn)
+
+  r = tree.query_radius((7,6), 1)
+  print(r)
+
+  r = tree.query_radius((7,6), 4)
+  print(r)
