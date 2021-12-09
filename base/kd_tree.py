@@ -147,6 +147,9 @@ class KdTree:
     assert self._root, "KdTree is empty!"
     pass
 
+  def balance(self) -> None:
+    pass
+
   def query_knn(self, point, k) -> List[tuple]:
     assert self._root, "KdTree is empty!"
 
